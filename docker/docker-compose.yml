@@ -1,0 +1,63 @@
+version: '3'
+
+services:
+  # MongoDB服务
+  mongodb:
+    image: mongo:latest
+    container_name: learning-scan-mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    command: mongod --port 27017
+    volumes:
+      - mongo-data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=learning_scan
+    networks:
+      - app-network
+
+  # 应用服务
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: learning-scan-app
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - mongodb
+    environment:
+      - NODE_ENV=development
+      - PORT=80
+      - MONGODB_URI=mongodb://root:password@mongodb:27017/learning_scan?authSource=admin
+      - "OPENAI_API_KEY=sk-734acb0969e047aba339b99fdae74a6d"
+      - "OPENAI_API_ENDPOINT=https://dashscope.aliyuncs.com/compatible-mode/v1"
+      - "OPENAI_MODEL=qwen-max"
+      - "OCR_API_KEY=sk-734acb0969e047aba339b99fdae74a6d"
+      - "OCR_API_ENDPOINT=https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+      - "OCR_MODEL=qwen-vl-max"
+    volumes:
+      - ../src:/usr/src/app/src
+      - ../public:/usr/src/app/public
+      - ../server.js:/usr/src/app/server.js
+      - ../package.json:/usr/src/app/package.json
+      - ../package-lock.json:/usr/src/app/package-lock.json
+      - ../nodemon.json:/usr/src/app/nodemon.json
+      - /usr/src/app/node_modules
+    command: npm run dev
+    networks:
+      - app-network
+
+# 创建持久卷来保存数据
+volumes:
+  mongo-data:
+    driver: local
+
+# 创建网络
+networks:
+  app-network:
+    driver: bridge 
