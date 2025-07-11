@@ -104,24 +104,79 @@ let lastQuestion = '';
 let lastSubject = '';
 let currentStep = '';
 
+// function renderAnalysis(data) {
+//   let html = `<div><b>学科：</b>${data.学科 || ''}　<b>题型：</b>${data.题型 || ''}　<b>难度：</b>${data.难度 || ''}</div>`;
+//   if (data.关键信息) {
+//     html += `<div class='mt-2'><b>关键信息：</b><ul>`;
+//     (Array.isArray(data.关键信息) ? data.关键信息 : Object.entries(data.关键信息)).forEach(item => {
+//       html += `<li>${Array.isArray(item) ? `<b>${item[0]}：</b>${item[1]}` : item}</li>`;
+//     });
+//     html += `</ul></div>`;
+//   }
+//   if (data['分学科guidance'] && typeof data['分学科guidance'] === 'object') {
+//     html += `<div class='mt-3'><b>分学科辅导：</b>`;
+//     Object.entries(data['分学科guidance']).forEach(([key, value]) => {
+//       html += `<div class='mt-2'><b>${key}：</b>${Array.isArray(value) ? `<ul>${value.map(i => `<li>${i}</li>`).join('')}</ul>` : value}</div>`;
+//     });
+//     html += `</div>`;
+//   }
+//   return html;
+// }
 function renderAnalysis(data) {
-  let html = `<div><b>学科：</b>${data.学科 || ''}　<b>题型：</b>${data.题型 || ''}　<b>难度：</b>${data.难度 || ''}</div>`;
+  let html = `<div><b>Subject:</b> ${data.学科 || ''}　<b>Type:</b> ${data.题型 || ''}　<b>Difficulty:</b> ${data.难度 || ''}</div>`;
+
+  // Render key information
   if (data.关键信息) {
-    html += `<div class='mt-2'><b>关键信息：</b><ul>`;
-    (Array.isArray(data.关键信息) ? data.关键信息 : Object.entries(data.关键信息)).forEach(item => {
-      html += `<li>${Array.isArray(item) ? `<b>${item[0]}：</b>${item[1]}` : item}</li>`;
+    html += `<div class='mt-2'><b>Key Information:</b><ul>`;
+    const infoItems = Array.isArray(data.关键信息)
+      ? data.关键信息
+      : Object.entries(data.关键信息);
+
+    infoItems.forEach(item => {
+      if (Array.isArray(item)) {
+        html += `<li><b>${item[0]}:</b> ${item[1]}</li>`;
+      } else {
+        html += `<li>${item}</li>`;
+      }
     });
     html += `</ul></div>`;
   }
+
+  // Render subject-specific guidance
   if (data['分学科guidance'] && typeof data['分学科guidance'] === 'object') {
-    html += `<div class='mt-3'><b>分学科辅导：</b>`;
-    Object.entries(data['分学科guidance']).forEach(([key, value]) => {
-      html += `<div class='mt-2'><b>${key}：</b>${Array.isArray(value) ? `<ul>${value.map(i => `<li>${i}</li>`).join('')}</ul>` : value}</div>`;
+    html += `<div class='mt-3'><b>Subject-Specific Tutoring:</b>`;
+
+    Object.entries(data['分学科guidance']).forEach(([subjectKey, subjectValue]) => {
+      html += `<div class='mt-2'><b>${subjectKey}:</b>`;
+
+      // If it's an object (like math steps), loop through its entries
+      if (typeof subjectValue === 'object' && !Array.isArray(subjectValue)) {
+        html += `<ul>`;
+        Object.entries(subjectValue).forEach(([stepKey, stepValue]) => {
+          html += `<li><b>${stepKey}:</b> ${stepValue}</li>`;
+        });
+        html += `</ul>`;
+      } 
+      // If it's an array, render as list
+      else if (Array.isArray(subjectValue)) {
+        html += `<ul>${subjectValue.map(i => `<li>${i}</li>`).join('')}</ul>`;
+      } 
+      // If it's a primitive (string/number), just display
+      else {
+        html += `${subjectValue}`;
+      }
+
+      html += `</div>`;
     });
+
     html += `</div>`;
   }
+
   return html;
 }
+
+
+
 
 function renderGuidance(data) {
   return `<div><b>${data.step || ''}：</b>${data.content || ''}</div>`;
@@ -152,10 +207,67 @@ function renderMathJax() {
   }
 }
 
-$('#analyzeBtn').on('click', function () {
+// $('#analyzeBtn').on('click', function () {
+//   const questionText = $('#questionText').val().trim();
+//   const subject = $('#subject').val();
+//   const imageFile = $('#imageInput')[0].files[0];
+
+//   if (!questionText && !imageFile) {
+//     $('#inputError').text('请输入题目内容或上传图片');
+//     return;
+//   }
+
+//   $('#inputError').text('');
+//   $('#analyzeBtn').prop('disabled', true).text('分析中...');
+//   $('#analysisSection, #guidanceSection, #parentSection').hide();
+
+//   const formData = new FormData();
+//   if (questionText) formData.append('questionText', questionText);
+//   if (subject) formData.append('subject', subject);
+//   if (imageFile) formData.append('image', imageFile);
+
+//   $.ajax({
+//     url: '/homework/analyze',
+//     method: 'POST',
+//     data: formData,
+//     processData: false,
+//     contentType: false,
+//     success: function (data) {
+//       lastQuestion = questionText || '图片题目';
+//       lastSubject = data.subject || subject;
+//       currentStep = '';
+//       $('#analysisResult').html(renderAnalysis(data));
+//       $('#analysisSection').show();
+//       renderMathJax();
+//       getGuidance('题目理解');
+//       getParentSupport();
+//     },
+//     error: function (xhr) {
+//       $('#analysisResult').html('<span class="text-danger">AI分析失败：' + (xhr.responseJSON?.error || '未知错误') + '</span>');
+//       $('#analysisSection').show();
+//     },
+//     complete: function () {
+//       $('#analyzeBtn').prop('disabled', false).text('智能分析');
+//     }
+//   });
+// });
+
+let currentImageBase64 = '';
+
+function getBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+  });
+}
+
+$('#analyzeBtn').on('click', async function () {
   const questionText = $('#questionText').val().trim();
   const subject = $('#subject').val();
-  const imageFile = $('#imageInput')[0].files[0];
+  const imageInput = $('#imageInput')[0];
+  const imageFile = imageInput.files[0];
 
   if (!questionText && !imageFile) {
     $('#inputError').text('请输入题目内容或上传图片');
@@ -165,6 +277,12 @@ $('#analyzeBtn').on('click', function () {
   $('#inputError').text('');
   $('#analyzeBtn').prop('disabled', true).text('分析中...');
   $('#analysisSection, #guidanceSection, #parentSection').hide();
+
+  let imageBase64 = '';
+  if (imageFile) {
+    imageBase64 = await getBase64(imageFile); // Convert image to base64
+    currentImageBase64 = imageBase64; // Save for guidance step
+  }
 
   const formData = new FormData();
   if (questionText) formData.append('questionText', questionText);
@@ -196,24 +314,36 @@ $('#analyzeBtn').on('click', function () {
     }
   });
 });
-
 function getGuidance(step) {
   $('#guidanceResult').html('<span class="text-secondary">正在生成个性化引导...</span>');
   $('#guidanceSection').show();
-  $.post('/homework/guidance', {
+
+  const payload = {
     questionText: lastQuestion,
     currentStep: step
-  }, function (data) {
-    currentStep = data.nextStep || '';
-    $('#guidanceResult').html(renderGuidance(data));
-    renderMathJax();
-    $('#nextGuidanceBtn').toggle(!!data.nextStep);
-  }).fail(function (xhr) {
-    $('#guidanceResult').html('<span class="text-danger">AI引导失败：' + (xhr.responseJSON?.error || '未知错误') + '</span>');
-    $('#nextGuidanceBtn').hide();
+  };
+
+  if (currentImageBase64) {
+    payload.imageBase64 = currentImageBase64; // Send image data too
+  }
+
+  $.ajax({
+    url: '/homework/guidance',
+    method: 'POST',
+    contentType: 'application/json',
+    data: JSON.stringify(payload),
+    success: function (data) {
+      currentStep = data.nextStep || '';
+      $('#guidanceResult').html(renderGuidance(data));
+      renderMathJax();
+      $('#nextGuidanceBtn').toggle(!!data.nextStep);
+    },
+    error: function (xhr) {
+      $('#guidanceResult').html('<span class="text-danger">AI引导失败：' + (xhr.responseJSON?.error || '未知错误') + '</span>');
+      $('#nextGuidanceBtn').hide();
+    }
   });
 }
-
 $('#nextGuidanceBtn').on('click', function () {
   if (currentStep) getGuidance(currentStep);
 });

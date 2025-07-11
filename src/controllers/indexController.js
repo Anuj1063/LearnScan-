@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const openai = require("../services/openai-service");
-const path=require('path')
-const fs=require('fs')
-const deleteFile=require('../utils/deleteFile')
+const path = require("path");
+const fs = require("fs");
+const deleteFile = require("../utils/deleteFile");
 const profilerUploader = require("../utils/fileUpload");
 const profileUpload = new profilerUploader({
   folderName: "uploads",
@@ -114,7 +114,7 @@ router.post("/plan/path-analysis", async (req, res) => {
 // AI interface of intelligent homework tutoring system
 router.post(
   "/homework/analyze",
-  profileUpload.upload().single("image"), // Field name must match frontend
+  profileUpload.upload().single("image"),
   async (req, res) => {
     const { questionText, subject } = req.body;
     const imageFile = req.file;
@@ -134,12 +134,11 @@ router.post(
           path.extname(imageFile.originalname).replace(".", "") || "jpeg";
 
         // Convert image to base64 with correct prefix
-        
+
         const imageBase64Data = fs.readFileSync(imageFile.path, {
           encoding: "base64",
         });
         const imageBase64 = `data:image/${fileExt};base64,${imageBase64Data}`;
-        
 
         // Call AI service
         aiResult = await openai.analyzeHomeworkWithImage({
@@ -150,7 +149,7 @@ router.post(
         });
 
         // Delete temp image
-        deleteFile("uploads",imageFile.filename);
+        deleteFile("uploads", imageFile.filename);
       } else {
         // No image, only question text
         aiResult = await openai.analyzeHomework({
@@ -171,27 +170,49 @@ router.post(
   }
 );
 
-router.post("/homework/guidance", async (req, res) => {
-  const { questionText, currentStep, imageBase64 } = req.body;
-  if (!questionText && !imageBase64) {
-    return res
-      .status(400)
-      .json({ error: "The content or picture of the title cannot be empty" });
+router.post(
+  "/homework/guidance",
+  profileUpload.upload().single("image"),
+  async (req, res) => {
+    const { questionText, currentStep, imageBase64 } = req.body;
+    const imageFile = req.file;
+
+    if (!questionText && !imageFile && !imageBase64) {
+      return res.status(400).json({
+        error: "Question text or image is required.",
+      });
+    }
+
+    let finalImageBase64 = imageBase64;
+
+    if (imageFile) {
+      const fileExt =
+        path.extname(imageFile.originalname).replace(".", "") || "jpeg";
+
+      const imageBase64Data = fs.readFileSync(imageFile.path, {
+        encoding: "base64",
+      });
+      finalImageBase64 = `data:image/${fileExt};base64,${imageBase64Data}`;
+    }
+
+    try {
+      const aiResult = await openai.progressiveGuidance({
+        questionText,
+        currentStep,
+        imageBase64: finalImageBase64,
+        user: req.session.user,
+      });
+
+      res.json(aiResult);
+    } catch (err) {
+      console.error("AI guidance failed:", err);
+      res.status(500).json({
+        error: "AI guidance failed",
+        detail: err.message,
+      });
+    }
   }
-  try {
-    const aiResult = await openai.progressiveGuidance({
-      questionText,
-      currentStepurrentStep,
-      imageBase64,
-      user: req.session.user,
-    });
-    res.json(aiResult);
-  } catch (err) {
-    res
-      .status(500)
-      .json({ error: "AI thinking guide failed", detail: err.message });
-  }
-});
+);
 
 router.post("/homework/parent-support", async (req, res) => {
   const { questionText, subject } = req.body;
@@ -211,20 +232,44 @@ router.post("/homework/parent-support", async (req, res) => {
 });
 
 // AI OCR picture recognition interface
-router.post("/homework/ai-ocr", async (req, res) => {
-  const { imageBase64 } = req.body;
-  if (!imageBase64) {
-    return res.status(400).json({ error: "Missing image data" });
+
+router.post(
+  "/homework/ai-ocr",
+  profileUpload.upload().single("image"),
+  async (req, res) => {
+    const { imageBase64 } = req.body;
+    const imageFile = req.file;
+
+    // Validate at least one input
+    if (!imageFile && !imageBase64) {
+      return res
+        .status(400)
+        .json({ error: "Image file or Base64 data required." });
+    }
+
+    let finalBase64 = imageBase64;
+
+    // If image file was uploaded, convert it to base64
+    if (imageFile) {
+      const fileExt =
+        path.extname(imageFile.originalname).replace(".", "") || "jpeg";
+      const fileBuffer = fs.readFileSync(imageFile.path);
+      finalBase64 = `data:image/${fileExt};base64,${fileBuffer.toString(
+        "base64"
+      )}`;
+    }
+
+    try {
+      const aiResult = await openai.ocrImage({ imageBase64: finalBase64 });
+
+      res.json({ text: aiResult.text || "" });
+    } catch (err) {
+      console.error("OCR Error:", err.message);
+      res
+        .status(500)
+        .json({ error: "AI image recognition failed", detail: err.message });
+    }
   }
-  try {
-    // Call AI OCR service
-    const aiResult = await openai.ocrImage({ imageBase64 });
-    res.json({ text: aiResult.text || "" });
-  } catch (err) {
-    res
-      .status(500)
-      .json({ error: "AI image recognition failed", detail: err.message });
-  }
-});
+);
 
 module.exports = router;

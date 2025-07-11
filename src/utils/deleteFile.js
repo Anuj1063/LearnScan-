@@ -1,22 +1,19 @@
-const path=require('path')
-const fs=require('fs')
+const path = require('path');
+const fs = require('fs');
 
+const deleteFile = (folderName, fileName) => {
+  if (!fileName) return;
 
-const deleteFile=(folderName,fileName)=>{
+  // Resolve from project root, not __dirname
+  const filePath = path.resolve(folderName, fileName);
 
-    if(!fileName)return 
-    
+  fs.unlink(filePath, (err) => {
+    if (err) {
+      console.error(`Failed to delete (${fileName}) :`, err);
+    } else {
+      console.log(`File ${fileName} deleted successfully`);
+    }
+  });
+};
 
-    const filePath= path.join(__dirname,'..',folderName,fileName)
-
-    fs.unlink(filePath,(err)=>{
-        if(err){
-            console.log(`Failed to Delete (${fileName}) :`,err);
-            
-        }else{
-            console.log(`file ${fileName} Deleted Sucessfully`)
-        }
-    })
-
-}
-module.exports=deleteFile;
+module.exports = deleteFile;
